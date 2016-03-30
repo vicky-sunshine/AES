@@ -64,17 +64,30 @@ uint8_t inv_s_box[256] = {
   0xa0, 0xe0, 0x3b, 0x4d, 0xae, 0x2a, 0xf5, 0xb0, 0xc8, 0xeb, 0xbb, 0x3c, 0x83, 0x53, 0x99, 0x61, // e
   0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d};// f
 
-
+/*
+Use for mix columns blocks of AES Encryption
+*/
 uint8_t mixcol_col[4] = {
   0x02, 0x03, 0x01, 0x01};
 
 /*
- */
+Use for inverse mixcolumns blocks of AES Decryption
+*/
 uint8_t inv_mixcol_col[4] = {
   0x0e, 0x0b, 0x0d, 0x09};
 
+/*
+Use for Rcon of Key schedule
+*/
 uint8_t R[] = {0x02, 0x00, 0x00, 0x00};
 
+/*
+Word (4 byte) addition
+[a0]   [b0]   [a0 + b0]
+[a1] + [b1] = [a1 + b1]
+[a2]   [b2]   [a2 + b2]
+[a3]   [b3]   [a3 + b3]
+*/
 void word_mult(uint8_t* a, uint8_t* b, uint8_t* result) {
   result[0] = GF256_mult(a[0],b[0])^GF256_mult(a[1],b[1])^GF256_mult(a[2],b[2])^GF256_mult(a[3],b[3]);
   result[1] = GF256_mult(a[3],b[0])^GF256_mult(a[0],b[1])^GF256_mult(a[1],b[2])^GF256_mult(a[2],b[3]);
@@ -82,6 +95,17 @@ void word_mult(uint8_t* a, uint8_t* b, uint8_t* result) {
   result[3] = GF256_mult(a[1],b[0])^GF256_mult(a[2],b[1])^GF256_mult(a[3],b[2])^GF256_mult(a[0],b[3]);
 }
 
+/*
+Word (4 byte) multiplication
+Especially for mix columns
+
+(we just use one row to represent the who matrix A)
+      A        B
+[a0 a1 a2 a3]*[b0] ~= [a0*b0+a1*b1+a2*b2+a3*b3]
+              [b1]    [a3*b0+a0*b1+a1*b2+a2*b3]
+              [b2]    [a2*b0+a3*b1+a0*b2+a1*b3]
+              [b3]    [a1*b0+a2*b1+a3*b2+a0*b3]
+*/
 void word_add(uint8_t* a, uint8_t* b, uint8_t* result) {
   result[0] = a[0]^b[0];
 	result[1] = a[1]^b[1];
@@ -89,7 +113,10 @@ void word_add(uint8_t* a, uint8_t* b, uint8_t* result) {
 	result[3] = a[3]^b[3];
 }
 
-// encrypt step
+/*
+AES Encryption
+Workflow of each round
+*/
 void round(uint8_t* state, uint8_t* round_key, uint8_t round_num) {
   sub_bytes(state);
   shift_rows(state);
@@ -97,23 +124,24 @@ void round(uint8_t* state, uint8_t* round_key, uint8_t round_num) {
 	add_round_key(state, round_key, round_num);
 }
 
+/*
+AES Encryption
+Workflow of final round
+*/
 void final_round(uint8_t* state, uint8_t* round_key) {
   sub_bytes(state);
   shift_rows(state);
   add_round_key(state, round_key, Nr);
 }
 
-void add_round_key(uint8_t* state, uint8_t* round_key, uint8_t round_num) {
-  uint8_t col;
+/*
+AES Encryption
+A simple substitution for each byte.
 
-  for (col = 0; col < Nb; col++) {
-    state[Nb * 0 + col] = state[Nb * 0 + col]^round_key[4 * Nb * round_num + Nb * col + 0];
-    state[Nb * 1 + col] = state[Nb * 1 + col]^round_key[4 * Nb * round_num + Nb * col + 1];
-    state[Nb * 2 + col] = state[Nb * 2 + col]^round_key[4 * Nb * round_num + Nb * col + 2];
-    state[Nb * 3 + col] = state[Nb * 3 + col]^round_key[4 * Nb * round_num + Nb * col + 3];
-  }
-}
-
+Each byte of state is replaced by
+a byte in row (left 4-bits) & column (right 4-bits) independently.
+We use the row and column to look up S-box transformation table
+*/
 void sub_bytes(uint8_t* state) {
   uint8_t row, col;
 
@@ -126,15 +154,29 @@ void sub_bytes(uint8_t* state) {
   }
 }
 
+/*
+AES Encryption
+The rows of the state are cyclically
+shifted (left) over different offsets.
+
+For Nb = 4,
+the 1st row no need to shift,
+the 2nd row is shifted left 1 byte,
+the 3rd row is shifted left 2 byte and
+the 4th row is shifted left 3 byte.
+*/
 void shift_rows(uint8_t* state) {
   // Nb = 4, shift number is as below
   uint8_t tmp, i, j, count;
 
-  for (i = 0; i < 4; i++) {
+  // for each row
+  for (i = 0; i < Nb; i++) {
       count = 0;
+      // shift count
   		while (count < i) {
   			tmp = state[Nb * i + 0];
 
+        //doing shift
   			for (j = 1; j < Nb; j++) {
   				state[Nb * i + j - 1] = state[Nb * i + j];
   			}
@@ -145,20 +187,48 @@ void shift_rows(uint8_t* state) {
   	}
 }
 
+/*
+AES Encryption
+Take the four bytes of each column of the state, and
+combine them by an invertible linear transformation.
+
+use [0x02 0x03 0x01 0x01] to represent the whole matrix
+(muiltiply the matrix is doing linear transformation)
+*/
 void mix_columns(uint8_t* state) {
   uint8_t col[4], result[4];
 
+  // for each column
   for (int i = 0; i < Nb; i++) {
-    // table
+    // take 4 bytes in each column
     for (int j = 0; j < 4; j++) {
       col[j] =  state[j * Nb + i];
     }
 
+    // doing transformatio
     word_mult(mixcol_col, col, result);
 
     for (int j = 0; j<4; j++) {
       state[j * Nb + i] = result[j];
     }
+  }
+}
+
+/*
+AES Encryption and Decryption
+XOR state with 128-bits of the round key
+
+Since XOR is own inverse, so the AES encryption and decryption
+using the same function to add round key
+*/
+void add_round_key(uint8_t* state, uint8_t* round_key, uint8_t round_num) {
+  uint8_t col;
+
+  for (col = 0; col < Nb; col++) {
+    state[Nb * 0 + col] = state[Nb * 0 + col]^round_key[4 * Nb * round_num + Nb * col + 0];
+    state[Nb * 1 + col] = state[Nb * 1 + col]^round_key[4 * Nb * round_num + Nb * col + 1];
+    state[Nb * 2 + col] = state[Nb * 2 + col]^round_key[4 * Nb * round_num + Nb * col + 2];
+    state[Nb * 3 + col] = state[Nb * 3 + col]^round_key[4 * Nb * round_num + Nb * col + 3];
   }
 }
 
