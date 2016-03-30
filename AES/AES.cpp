@@ -170,13 +170,13 @@ void shift_rows(uint8_t* state) {
   uint8_t tmp, i, j, count;
 
   // for each row
-  for (i = 0; i < Nb; i++) {
+  for (i = 0; i < 4; i++) {
       count = 0;
       // shift count
   		while (count < i) {
   			tmp = state[Nb * i + 0];
 
-        //doing shift
+        // doing shift
   			for (j = 1; j < Nb; j++) {
   				state[Nb * i + j - 1] = state[Nb * i + j];
   			}
@@ -205,7 +205,7 @@ void mix_columns(uint8_t* state) {
       col[j] =  state[j * Nb + i];
     }
 
-    // doing transformatio
+    // doing transformation
     word_mult(mixcol_col, col, result);
 
     for (int j = 0; j<4; j++) {
@@ -232,7 +232,10 @@ void add_round_key(uint8_t* state, uint8_t* round_key, uint8_t round_num) {
   }
 }
 
-// decrypt
+/*
+AES Decryption
+Workflow of each round
+*/
 void inv_round(uint8_t* state, uint8_t* round_key, uint8_t round_num) {
   inv_shift_rows(state);
   inv_sub_bytes(state);
@@ -240,12 +243,22 @@ void inv_round(uint8_t* state, uint8_t* round_key, uint8_t round_num) {
   inv_mix_columns(state);
 }
 
+/*
+AES Decryption
+Workflow of final round
+*/
 void inv_final_round(uint8_t* state, uint8_t* round_key) {
   inv_shift_rows(state);
 	inv_sub_bytes(state);
 	add_round_key(state, round_key, 0);
 }
 
+/*
+AES Decryption
+Each byte of state is replaced by
+a byte in row (left 4-bits) & column (right 4-bits) independently.
+We use the row and column to look up Inverse S-box transformation table
+*/
 void inv_sub_bytes(uint8_t* state) {
   uint8_t row, col;
 
@@ -258,14 +271,28 @@ void inv_sub_bytes(uint8_t* state) {
   }
 }
 
+/*
+AES Decryption
+The rows of the state are cyclically
+shifted back(right) over different offsets.
+
+For Nb = 4,
+the 1st row no need to shift,
+the 2nd row is shifted right 1 byte,
+the 3rd row is shifted right 2 byte and
+the 4th row is shifted right 3 byte.
+*/
 void inv_shift_rows(uint8_t* state) {
   uint8_t tmp, i, j, count;
 
+  // for each row
   for (i = 0; i < 4; i++) {
       count = 0;
+      // count shift
       while (count < i) {
         tmp = state[Nb * (i + 1) - 1];
 
+        // doing shift back
         for (j = Nb-1; j > 0; j--) {
           state[Nb * i + j] = state[Nb * i + j - 1];
         }
@@ -276,15 +303,22 @@ void inv_shift_rows(uint8_t* state) {
     }
 }
 
+/*
+AES Decryption
+
+use [0x0e 0x0b 0x0d 0x09] to do inverse transformation
+(check mix_columns() to see detail)
+*/
 void inv_mix_columns(uint8_t* state) {
   uint8_t col[4], result[4];
 
+  // for each column
   for (int i = 0; i < Nb; i++) {
-    // table
+    // take 4 bytes in each column
     for (int j = 0; j < 4; j++) {
       col[j] =  state[j * Nb + i];
     }
-
+    // doing inverse transform
     word_mult(inv_mixcol_col, col, result);
 
     for (int j = 0; j<4; j++) {
@@ -379,23 +413,29 @@ uint8_t* Rcon(uint8_t i) {
 	return R;
 }
 
-
+/*
+AES Encryption
+The whole workflow for AES Encryption
+*/
 void AES_Encrypt(uint8_t* plaintext, uint8_t* ciphertext, uint8_t* round_key) {
   uint8_t state[4 * Nb];
 
+  // put plaintext into state
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < Nb; j++) {
 			state[Nb * i + j] = plaintext[i + 4 * j];
 		}
   }
 
+  // initail add round key (round 0)
   add_round_key(state, round_key, 0); // ok
 
-  //ok
+  // take Nr - 1 rounds
   for (uint8_t r = 1; r < Nr; r++) {
 		round(state, round_key, r);
 	}
 
+  // final round (round 10)
   final_round(state, round_key);
 
   for (int i = 0; i < 4; i++) {
@@ -408,19 +448,22 @@ void AES_Encrypt(uint8_t* plaintext, uint8_t* ciphertext, uint8_t* round_key) {
 void AES_Decrypt(uint8_t* plaintext, uint8_t* ciphertext, uint8_t* round_key) {
   uint8_t state[4 * Nb];
 
+  // put ciphertext into state
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < Nb; j++) {
       state[Nb * i + j] = ciphertext[i + 4 * j];
     }
   }
 
+  // initial add round key (round 10)
   add_round_key(state, round_key, Nr); // ok
 
-  //ok
+  // take Nr - 1 round
   for (uint8_t r = Nr - 1; r > 0; r--) {
     inv_round(state, round_key, r);
   }
 
+  // final round (round 0)
   inv_final_round(state, round_key);
 
   for (int i = 0; i < 4; i++) {
@@ -430,7 +473,10 @@ void AES_Decrypt(uint8_t* plaintext, uint8_t* ciphertext, uint8_t* round_key) {
   }
 }
 
-void printSquare(uint8_t* in) {
+/*
+Use to print out the state/block (4 word, 16 bytes)
+*/
+void printBlock(uint8_t* in) {
   for (int i = 0; i < 4; i++) {
     printf("%2x %2x %2x %2x\n", in[4*i+0], in[4*i+1], in[4*i+2], in[4*i+3]);
   }

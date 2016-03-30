@@ -54,6 +54,7 @@ The rows of the state are cyclically
 shifted (left) over different offsets.
 
 For Nb = 4,
+the 1st row no need to shift,
 the 2nd row is shifted left 1 byte,
 the 3rd row is shifted left 2 byte and
 the 4th row is shifted left 3 byte.
@@ -79,20 +80,46 @@ using the same function to add round key
 */
 void add_round_key(uint8_t* state, uint8_t* round_key, uint8_t round_num);
 
-
-//  decrypt step
+/*
+AES Decryption
+Workflow of each round
+*/
 void inv_round(uint8_t* state, uint8_t* round_key, uint8_t round_num);
-void inv_final_round(uint8_t* state, uint8_t* round_key);
-
-void inv_sub_bytes(uint8_t* state);
-void inv_shift_rows(uint8_t* state);
-void inv_mix_columns(uint8_t* state);
 
 /*
-Key schedule
-The whole key expansion workflow
+AES Decryption
+Workflow of final round
 */
-void key_expansion(uint8_t* key, uint8_t* round_key);
+void inv_final_round(uint8_t* state, uint8_t* round_key);
+
+/*
+AES Decryption
+Each byte of state is replaced by
+a byte in row (left 4-bits) & column (right 4-bits) independently.
+We use the row and column to look up Inverse S-box transformation table
+*/
+void inv_sub_bytes(uint8_t* state);
+
+/*
+AES Decryption
+The rows of the state are cyclically
+shifted back(right) over different offsets.
+
+For Nb = 4,
+the 1st row no need to shift,
+the 2nd row is shifted right 1 byte,
+the 3rd row is shifted right 2 byte and
+the 4th row is shifted right 3 byte.
+*/
+void inv_shift_rows(uint8_t* state);
+
+/*
+AES Decryption
+
+use [0x0e 0x0b 0x0d 0x09] to do inverse transformation
+(check mix_columns() to see detail)
+*/
+void inv_mix_columns(uint8_t* state);
 
 /*
 Key schedule
@@ -113,9 +140,27 @@ where RC[1] = 1, RC[i] = 2 * Rc[i-1] in GF(256)
 */
 uint8_t* Rcon(uint8_t i);
 
+/*
+Key schedule
+The whole key expansion workflow
+*/
+void key_expansion(uint8_t* key, uint8_t* round_key);
 
+/*
+AES Encryption
+The whole workflow for AES Encryption
+*/
 void AES_Encrypt(uint8_t* plaintext, uint8_t* ciphertext, uint8_t* key);
+
+/*
+AES Decryption
+The whole workflow for AES Decryption
+*/
 void AES_Decrypt(uint8_t* plaintext, uint8_t* ciphertext, uint8_t* key);
-void printSquare(uint8_t* in);
+
+/*
+Use to print out the state/block (4 word, 16 bytes)
+*/
+void printBlock(uint8_t* in);
 
 #endif /* AES_hpp */
