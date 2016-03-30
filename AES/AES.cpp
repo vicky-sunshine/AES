@@ -64,16 +64,14 @@ uint8_t inv_s_box[256] = {
   0xa0, 0xe0, 0x3b, 0x4d, 0xae, 0x2a, 0xf5, 0xb0, 0xc8, 0xeb, 0xbb, 0x3c, 0x83, 0x53, 0x99, 0x61, // e
   0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d};// f
 
-/*
 
- */
-uint8_t mixcol_mtx[4] = {
+uint8_t mixcol_col[4] = {
   0x02, 0x03, 0x01, 0x01};
 
 /*
  */
 uint8_t inv_mixcol_col[4] = {
-  0x0e, 0x09, 0x0d, 0x0b};
+  0x0e, 0x0b, 0x0d, 0x09};
 
 uint8_t R[] = {0x02, 0x00, 0x00, 0x00};
 
@@ -135,17 +133,16 @@ void shift_rows(uint8_t* state) {
   for (i = 0; i < 4; i++) {
       count = 0;
   		while (count < i) {
-  			tmp = state[Nb*i+0];
+  			tmp = state[Nb * i + 0];
 
   			for (j = 1; j < Nb; j++) {
-  				state[Nb * i + j-1] = state[Nb * i + j];
+  				state[Nb * i + j - 1] = state[Nb * i + j];
   			}
 
   			state[Nb * (i + 1) - 1] = tmp;
   			count++;
   		}
   	}
-
 }
 
 void mix_columns(uint8_t* state) {
@@ -157,8 +154,67 @@ void mix_columns(uint8_t* state) {
       col[j] =  state[j * Nb + i];
     }
 
-    word_mult(mixcol_mtx, col, result);
+    word_mult(mixcol_col, col, result);
 
+    for (int j = 0; j<4; j++) {
+      state[j * Nb + i] = result[j];
+    }
+  }
+}
+
+// decrypt
+void inv_round(uint8_t* state, uint8_t* round_key, uint8_t round_num) {
+  inv_shift_rows(state);
+  inv_sub_bytes(state);
+  add_round_key(state, round_key, round_num);
+  inv_mix_columns(state);
+}
+
+void inv_final_round(uint8_t* state, uint8_t* round_key) {
+  inv_shift_rows(state);
+	inv_sub_bytes(state);
+	add_round_key(state, round_key, 0);
+}
+
+void inv_sub_bytes(uint8_t* state) {
+  uint8_t row, col;
+
+  for (uint8_t i = 0; i < 4; i++) {
+    for (uint8_t j = 0; j < Nb; j++) {
+      row = state[Nb * i + j] >> 4;
+      col = state[Nb * i + j] & 0x0f;
+      state[Nb * i + j] = inv_s_box[16 * row + col];
+    }
+  }
+}
+
+void inv_shift_rows(uint8_t* state) {
+  uint8_t tmp, i, j, count;
+
+  for (i = 0; i < 4; i++) {
+      count = 0;
+      while (count < i) {
+        tmp = state[Nb * (i + 1) - 1];
+
+        for (j = Nb-1; j > 0; j--) {
+          state[Nb * i + j] = state[Nb * i + j - 1];
+        }
+
+        state[Nb * i + 0] = tmp;
+        count++;
+      }
+    }
+}
+void inv_mix_columns(uint8_t* state) {
+  uint8_t col[4], result[4];
+
+  for (int i = 0; i < Nb; i++) {
+    // table
+    for (int j = 0; j < 4; j++) {
+      col[j] =  state[j * Nb + i];
+    }
+
+    word_mult(inv_mixcol_col, col, result);
 
     for (int j = 0; j<4; j++) {
       state[j * Nb + i] = result[j];
@@ -248,10 +304,7 @@ void AES_Encrypt(uint8_t* plaintext, uint8_t* ciphertext, uint8_t* round_key) {
 
   //ok
   for (uint8_t r = 1; r < Nr; r++) {
-		sub_bytes(state);
-		shift_rows(state);
-		mix_columns(state);
-		add_round_key(state, round_key, r);
+		round(state, round_key, r);
 	}
 
   final_round(state, round_key);
@@ -261,7 +314,31 @@ void AES_Encrypt(uint8_t* plaintext, uint8_t* ciphertext, uint8_t* round_key) {
       ciphertext[i + 4 * j] = state[Nb * i + j];
     }
   }
+}
 
+void AES_Decrypt(uint8_t* plaintext, uint8_t* ciphertext, uint8_t* round_key) {
+  uint8_t state[4 * Nb];
+
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < Nb; j++) {
+      state[Nb * i + j] = ciphertext[i + 4 * j];
+    }
+  }
+
+  add_round_key(state, round_key, Nr); // ok
+
+  //ok
+  for (uint8_t r = Nr - 1; r > 0; r--) {
+    inv_round(state, round_key, r);
+  }
+
+  inv_final_round(state, round_key);
+
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < Nb; j++) {
+      plaintext[i + 4 * j] = state[Nb * i + j];
+    }
+  }
 }
 
 void printSquare(uint8_t* in) {

@@ -19,7 +19,7 @@ void shift_rows(uint8_t* state);
 void mix_columns(uint8_t* state);
 
 //  decrypt step
-void inv_round(uint8_t* state, uint8_t* round_key);
+void inv_round(uint8_t* state, uint8_t* round_key, uint8_t round_num);
 void inv_final_round(uint8_t* state, uint8_t* round_key);
 
 void inv_sub_bytes(uint8_t* state);
