@@ -1,12 +1,16 @@
 #include "GF256.hpp"
 
 
-// returns a + b. mx is the irreducible polynomial
+/*
+Addition in GF(256)
+*/
 uint8_t GF256_add(uint8_t a, uint8_t b) {
   return a ^ b;
 }
 
-// Multiplied by x. mx is the irreducible polynomial
+/*
+Multiplied by x in GF(256)
+*/
 uint8_t GF256_mult_x(uint8_t a) {
   if (a & 0x80) {
     // highest bit == 1
@@ -17,7 +21,9 @@ uint8_t GF256_mult_x(uint8_t a) {
   }
 }
 
-// General multiplication: mx is the irreducible polynomial
+/*
+General multiplication in GF(256)
+*/
 uint8_t GF256_mult(uint8_t a, uint8_t b) {
   uint8_t value = 0;
 
