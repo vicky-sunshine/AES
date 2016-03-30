@@ -27,23 +27,30 @@ void inv_shift_rows(uint8_t* state);
 void inv_mix_columns(uint8_t* state);
 
 /*
-  key schedule
+Key schedule
+The whole key expansion workflow
 */
 void key_expansion(uint8_t* key, uint8_t* round_key);
 
 /*
-Byte substitution using the S-box.
-*/
-void sub_word(uint8_t* word);
-
-/*
+Key schedule
 One-byte circular left shift.
 */
 void rot_word(uint8_t* w);
 
 /*
+Key schedule
+Byte substitution using the S-box.
+*/
+void sub_word(uint8_t* word);
+
+/*
+Key schedule
+Constant Rcon[i] = {RC[i], 0, 0, 0}
+where RC[1] = 1, RC[i] = 2 * Rc[i-1] in GF(256)
 */
 uint8_t* Rcon(uint8_t i);
+
 
 void AES_Encrypt(uint8_t* plaintext, uint8_t* ciphertext, uint8_t* key);
 void AES_Decrypt(uint8_t* plaintext, uint8_t* ciphertext, uint8_t* key);

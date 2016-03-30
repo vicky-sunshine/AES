@@ -205,6 +205,7 @@ void inv_shift_rows(uint8_t* state) {
       }
     }
 }
+
 void inv_mix_columns(uint8_t* state) {
   uint8_t col[4], result[4];
 
@@ -222,37 +223,76 @@ void inv_mix_columns(uint8_t* state) {
   }
 }
 
-// key schedule
+/*
+Key schedule
+The whole key expansion workflow
+*/
 void key_expansion(uint8_t* key, uint8_t* round_key) {
   uint8_t len = Nb * (Nr + 1);
   uint8_t tmp[4];
 
+  // copying key into first 4 words
   for (int i = 0; i < Nk; i++) {
     for (int j = 0; j < 4; j++) {
       round_key[4 * i + j] = key[4 * i + j];
     }
   }
 
+  // loop creating words that
+  // depend on values in previous & 4 places back
 	for (int i = Nk; i < len; i++) {
+    // copy previous word
     for (int j = 0; j < 4; j++) {
       tmp[j] = round_key[4*(i-1)+j];
     }
 
+    //  every 4th has S-box + rotate + XOR Rcon
 		if (i % Nk == 0) {
-
 			rot_word(tmp);
 			sub_word(tmp);
 			word_add(tmp, Rcon(i/Nk), tmp);
-
 		}
 
+    // Xor with 4 places back
     for (int j = 0; j < 4; j++) {
       round_key[4 * i + j] = round_key[4 * (i - Nk) + j]^tmp[j];
     }
 	}
-
 }
 
+/*
+Key schedule
+One-byte circular left shift.
+*/
+void rot_word(uint8_t* word) {
+  uint8_t tmp;
+
+  tmp = word[0];
+  for (int i = 0; i < 3; i++) {
+    word[i] = word[i + 1];
+  }
+  word[3] = tmp;
+}
+
+/*
+Key schedule
+Byte substitution using the S-box.
+*/
+void sub_word(uint8_t* word) {
+  uint8_t row, col;
+
+  for (int i = 0; i < 4; i++) {
+    row = word[i] >> 4;
+    col = word[i] & 0x0f;
+    word[i] = s_box[16 * row + col];
+  }
+}
+
+/*
+Key schedule
+Constant Rcon[i] = {RC[i], 0, 0, 0}
+where RC[1] = 1, RC[i] = 2 * Rc[i-1] in GF(256)
+*/
 uint8_t* Rcon(uint8_t i) {
 
 	if (i == 1) {
@@ -268,27 +308,6 @@ uint8_t* Rcon(uint8_t i) {
 
 	return R;
 }
-
-void sub_word(uint8_t* word) {
-  uint8_t row, col;
-
-  for (int i = 0; i < 4; i++) {
-    row = word[i] >> 4;
-    col = word[i] & 0x0f;
-    word[i] = s_box[16 * row + col];
-  }
-}
-
-void rot_word(uint8_t* word) {
-  uint8_t tmp;
-
-  tmp = word[0];
-  for (int i = 0; i < 3; i++) {
-    word[i] = word[i + 1];
-  }
-  word[3] = tmp;
-}
-
 
 
 void AES_Encrypt(uint8_t* plaintext, uint8_t* ciphertext, uint8_t* round_key) {
